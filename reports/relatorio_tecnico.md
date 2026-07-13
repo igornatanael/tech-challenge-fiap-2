@@ -187,7 +187,41 @@ Os valores clínicos individuais não são logados — apenas o resultado agrega
 
 ---
 
-## 6. Testes Automatizados
+## 6. Desafios e Soluções
+
+### 6.1 Incompatibilidade do matplotlib com Python 3.14
+
+O método `Path.__deepcopy__` do matplotlib chama `copy.deepcopy(super(), memo)`, que em Python 3.14 causa recursão infinita devido a uma mudança no comportamento do proxy `super()` no módulo `copy`. O erro se manifestava em qualquer renderização de figura, impedindo a execução dos notebooks.
+
+**Solução:** patch direto no arquivo do matplotlib instalado no ambiente virtual, substituindo a implementação do método por uma cópia manual via `__dict__`, que não aciona o mecanismo de deepcopy recursivo. Adicionalmente, todas as chamadas a `plt.tight_layout()` foram removidas dos notebooks — eram desnecessárias pois `bbox_inches="tight"` no `savefig` já cumpre a mesma função — e `plt.show()` foi substituído por `plt.close("all")` para liberar memória em execução headless.
+
+### 6.2 Serialização com joblib no Python 3.14
+
+A paralelização via `n_jobs=-1` no scikit-learn (usado no GridSearch e na validação cruzada) causava falhas de serialização com joblib no Python 3.14. O erro não ocorria no Python 3.11, evidenciando uma incompatibilidade com a versão em uso.
+
+**Solução:** substituição de todos os `n_jobs=-1` por `n_jobs=1` em `src/models/baseline.py` e `src/genetic_algorithm/fitness.py`. O impacto no tempo de execução é relevante para os experimentos do AG (cada avaliação de fitness roda sequencialmente), mas é aceitável dado o tamanho do dataset (~790 registros) e a ausência de requisito de tempo real.
+
+### 6.3 Ausência de wheel do scipy para Python 3.14
+
+O scipy não disponibilizava wheel compilado para Python 3.14 no momento do desenvolvimento, e a compilação a partir do código-fonte falhou por incompatibilidades com o toolchain disponível.
+
+**Solução:** remoção do scipy do `requirements.txt`. As funcionalidades utilizadas no projeto (validação cruzada, métricas, pipelines) são cobertas pelo scikit-learn sem dependência direta do scipy.
+
+### 6.4 Dtype do alvo após mapeamento categórico
+
+O pipeline de pré-processamento converte a coluna de risco de strings (`"low risk"`, `"mid risk"`, `"high risk"`) para inteiros via `map()`. Após o split treino/teste, o dtype resultante era `object` em vez de `int64`, causando `ValueError: Got 'unknown' target type` no scikit-learn ao tentar treinar classificadores.
+
+**Solução:** adição de `.astype("int64")` explícito em `y_train` e `y_test` imediatamente após o split em `src/pipelines/preprocessing.py`.
+
+### 6.5 Custo computacional do AG sem paralelismo
+
+Com `n_jobs=1` e 3 experimentos (600 + 600 + 1800 = 3000 avaliações de fitness), o tempo total de execução dos experimentos foi de aproximadamente 35 minutos. Isso inviabilizou iteração rápida durante o desenvolvimento.
+
+**Solução:** para o ciclo de desenvolvimento, os experimentos foram rodados com populações e gerações reduzidas (pop=5, gen=3) para validar o pipeline completo. A execução completa foi realizada via `nbconvert` headless em background, permitindo trabalho paralelo. Os resultados foram salvos em JSON após cada experimento para evitar re-execução.
+
+---
+
+## 7. Testes Automatizados
 
 O projeto conta com 21 testes automatizados distribuídos em 4 módulos, executados via pytest:
 
