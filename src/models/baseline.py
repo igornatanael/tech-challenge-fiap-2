@@ -93,7 +93,7 @@ def build_pipelines() -> dict[str, Pipeline]:
                 n_estimators=200,
                 class_weight="balanced_subsample",
                 random_state=RANDOM_STATE,
-                n_jobs=-1,
+                n_jobs=1,
             )),
         ]),
 
@@ -145,7 +145,7 @@ def run_cross_validation(
             cv=cv,
             scoring=scoring,
             return_train_score=False,
-            n_jobs=-1,
+            n_jobs=1,
         )
         row: dict[str, Any] = {"modelo": nome}
         for metrica in scoring:
@@ -226,7 +226,7 @@ def run_grid_search(
             param_grid=grid,
             cv=cv,
             scoring=scoring,
-            n_jobs=-1,
+            n_jobs=1,
             refit=True,    # re-treina com os melhores params no X_train completo
             verbose=0,
         )

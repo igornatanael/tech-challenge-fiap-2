@@ -16,7 +16,7 @@ import pandas as pd
 
 # Caminho padrao do dataset bruto (resolvido a partir da raiz do projeto)
 PROJECT_ROOT = Path(__file__).resolve().parents[2]
-DEFAULT_RAW_PATH = PROJECT_ROOT / "data" / "raw" / "maternal_health_risk.csv"
+DEFAULT_RAW_PATH = PROJECT_ROOT / "data" / "maternal_health_risk.csv"
 
 # Esquema esperado do dataset
 EXPECTED_COLUMNS = [

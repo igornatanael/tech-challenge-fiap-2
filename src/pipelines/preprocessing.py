@@ -198,7 +198,7 @@ def _convert_body_temp_to_celsius(df: pd.DataFrame) -> pd.DataFrame:
     pois nao ha razao para manter os dois.
     """
     df = df.copy()
-    df["BodyTemp"] = (df["BodyTemp"] - 32) * 5 / 9
+    df.loc[:, "BodyTemp"] = (df["BodyTemp"] - 32) * 5 / 9
     print("[features] BodyTemp convertida de Fahrenheit para Celsius.")
     return df
 
@@ -211,7 +211,7 @@ def encode_target(df: pd.DataFrame) -> pd.DataFrame:
     (erro entre low e high e mais grave que entre low e mid).
     """
     df = df.copy()
-    df[TARGET_COLUMN] = df[TARGET_COLUMN].map(RISK_ENCODING)
+    df.loc[:, TARGET_COLUMN] = df[TARGET_COLUMN].map(RISK_ENCODING).astype(int)
     if df[TARGET_COLUMN].isna().any():
         valores_desconhecidos = df[df[TARGET_COLUMN].isna()][TARGET_COLUMN].unique()
         raise ValueError(
@@ -353,6 +353,10 @@ def build_preprocessed_splits(
 
     # 6. Split estratificado
     X_train, X_test, y_train, y_test = stratified_split(X, y, test_size, random_state)
+
+    # Garante dtype int64 no alvo (necessário para sklearn — map() pode retornar object)
+    y_train = y_train.astype("int64")
+    y_test = y_test.astype("int64")
 
     # 7. Padronizacao
     scaler = fit_scaler(X_train)
