@@ -109,25 +109,85 @@ O Experimento 3, com população de 60 indivíduos e 30 gerações, convergiu pa
 
 ## 4. Integração com LLM (Claude)
 
-### 4.1 Arquitetura
+### 4.1 Arquitetura de Agentes
 
-A integração com LLM é implementada via Anthropic Python SDK (`anthropic`). O fluxo é: cliente Anthropic instanciado com a chave de API configurada via variável de ambiente → construção do prompt via funções especializadas em `src/llm/prompts.py` → chamada à API com `model`, `system` e `messages` → retorno do texto gerado. Três funções de construção de prompt cobrem os casos de uso: `build_diagnosis_prompt` para diagnóstico individual, `build_optimization_report_prompt` para análise comparativa baseline vs. otimizado, e `build_qa_prompt` para perguntas livres do médico sobre um caso específico.
+A integração com LLM adota uma arquitetura de agentes especializados implementada em `src/llm/agents/`. A base é a classe `BaseAgent`, que encapsula o Anthropic Python SDK (`anthropic==0.40.0`) e mantém o histórico de conversa multi-turn (`self.history: list[dict]`). A cada chamada a `chat()`, a mensagem do usuário é adicionada ao histórico, a API é invocada com o histórico completo e o `system` prompt do agente, e a resposta do Claude é adicionada de volta — permitindo que o agente mantenha contexto ao longo de múltiplas interações na mesma sessão.
+
+Dois agentes concretos herdam de `BaseAgent`:
+
+**`PatientAgent`** — projetado para interagir com a paciente gestante. System prompt com tom acolhedor, linguagem acessível sem jargão médico, guardrail explícito contra prescrição de medicamentos e contra perguntas fora do escopo de saúde gestacional. Ao receber uma pergunta fora do escopo, retorna mensagem padronizada sem tentar responder.
+
+**`DoctorAgent`** — projetado para interagir com o médico obstetra. System prompt com tom técnico e terminologia clínica, valores de referência clínicos embutidos (ex: PA ≥140/90 = HAS, BS ≥7.0 mmol/L = diabetes), guardrail contra perguntas administrativas ou jurídicas. Estrutura as respostas iniciais em quatro seções: análise do modelo, avaliação clínica, investigação sugerida e conduta recomendada.
+
+O modelo utilizado é `claude-sonnet-4-6`, configurável via variável de ambiente `ANTHROPIC_MODEL`.
 
 ### 4.2 Prompt Engineering
 
-**System prompt** (`SYSTEM_MEDICO`): posiciona o modelo como especialista em inteligência artificial médica assistindo obstetras. As diretrizes incluem uso de linguagem clara sem alarmismo desnecessário, preferência por terminologia reconhecível pelo médico obstetra em detrimento de jargão técnico de ML, e recomendação explícita de avaliação presencial como etapa insubstituível — reforçando que o sistema é ferramenta de apoio à decisão.
+Cada agente dispõe de uma função de construção do prompt inicial (`_build_*_initial_prompt`) que injeta os dados clínicos individuais da paciente, a predição do modelo, as probabilidades por classe e a importância das features — permitindo respostas personalizadas para cada caso, e não genéricas por classe de risco.
 
-**Prompt de diagnóstico** (`build_diagnosis_prompt`): contextualiza o modelo com os dados clínicos da paciente, a predição do Random Forest, as probabilidades por classe e a importância das features. Solicita resposta estruturada em quatro seções: (1) explicação da predição em 2-3 parágrafos acessíveis ao obstetra; (2) fatores mais relevantes com significado clínico; (3) parâmetros e sinais a monitorar com maior atenção; (4) limitações do modelo e justificativa para avaliação presencial.
+**PatientAgent:** o prompt instrui o Claude a explicar o risco sem citar probabilidades numéricas, mapear os valores individuais (ex: BS=15.0 mmol/L → orientação sobre alimentação; SystolicBP=160 mmHg → orientação de buscar atendimento hoje) e calibrar a urgência da recomendação ao nível de risco real (emergência / urgência / rotina).
 
-**Prompt Q&A** (`build_qa_prompt`): fornece o mesmo contexto do paciente (dados clínicos, predição, probabilidades por classe) e acrescenta a pergunta específica do médico. Instrui o modelo a responder de forma direta e clinicamente acionável, com indicação explícita quando a pergunta extrapola o que os dados permitem responder — prevenindo alucinações confiantes sobre informações não disponíveis.
+**DoctorAgent:** o prompt fornece a importância das top 4 features com os valores da paciente, solicita análise por seção com interpretação dos achados individuais em relação aos valores de referência clínicos, e orienta investigação complementar e conduta específicas para o caso.
 
-### 4.3 Casos de Uso Demonstrados
+### 4.3 Avaliação da Qualidade (LLM-as-judge)
 
-O sistema demonstra quatro casos de uso principais. No diagnóstico individual com explicação clínica, um paciente representativo de cada classe de risco (baixo, médio e alto) é submetido ao classificador, e o LLM gera a explicação narrativa estruturada nas quatro seções descritas acima. No modo Q&A, o médico pode formular perguntas livres sobre o caso — por exemplo, sobre risco de pré-eclâmpsia ou necessidade de internação — e receber respostas contextualizadas com os dados da paciente. No relatório narrativo de otimização, o LLM analisa as métricas do baseline e do modelo otimizado pelo AG e interpreta as diferenças em termos de impacto clínico, especialmente para falsos negativos de alto risco. Por fim, um aplicativo web interativo implementado em Streamlit permite que o médico insira dados da paciente, visualize a predição do modelo e interaja com o LLM para diagnóstico e Q&A sem necessidade de linha de comando.
+A qualidade das respostas geradas pelos agentes é avaliada automaticamente via `src/llm/agents/evaluator.py`, utilizando o próprio Claude como juiz. O avaliador recebe a resposta gerada, o tipo de agente, os dados do caso e o nível de risco, e retorna scores em rubric distinto por agente:
+
+| Critério (PatientAgent) | Critério (DoctorAgent) |
+|---|---|
+| clareza (1–5) | precisao_clinica (1–5) |
+| tom_adequado (1–5) | completude (1–5) |
+| urgencia_correta (1–5) | acionabilidade (1–5) |
+| acionabilidade (1–5) | terminologia (1–5) |
+| within_scope (bool) | within_scope (bool) |
+
+O avaliador faz uma única chamada à API, solicita resposta em JSON estruturado e parseia o resultado, retornando `{scores, within_scope, justificativa, score_total}`. O `score_total` é a média aritmética dos critérios numéricos.
+
+### 4.4 Interface Web — Chatbot
+
+A interface de usuário é implementada em Streamlit (`app.py`) como um chatbot conversacional, substituindo o formulário estático original. O fluxo é:
+
+1. **Landing page** com botão "Iniciar Avaliação"
+2. **Identificação do perfil**: o bot pergunta se o usuário é médico ou paciente, instanciando o agente correspondente
+3. **Coleta de dados via chat**: os 6 campos clínicos são coletados sequencialmente com validação de range fisiológico e cross-validation (ex: pressão diastólica < sistólica). A temperatura é coletada em °C e convertida para °F internamente antes de passar ao modelo, que foi treinado nessa escala
+4. **Diagnóstico**: o modelo RF otimizado classifica o risco; o agente ativo gera a análise inicial personalizada
+5. **Q&A multi-turn**: sessão aberta de perguntas com histórico de conversa preservado
+
+Palavras-chave como "recomeçar" ou "nova avaliação" reiniciam a sessão a qualquer momento.
 
 ---
 
-## 5. Testes Automatizados
+## 5. Observabilidade
+
+O módulo `src/observability/` implementa logging estruturado em formato JSON (NDJSON — uma linha por evento) via o módulo `logging` nativo do Python. O design prioriza plugabilidade: localmente os logs são gravados em `logs/app.log` e no stdout; para adicionar observabilidade cloud basta instanciar um handler adicional em `setup_logging()` sem alterar o código de negócio:
+
+```python
+# AWS CloudWatch
+logger.addHandler(watchtower.CloudWatchLogHandler(log_group="/risk-gestacional"))
+
+# Datadog
+logger.addHandler(DatadogHandler(api_key=..., service="risk-gestacional"))
+
+# OpenTelemetry (vendor-neutral)
+# configurar LoggerProvider com o exporter do backend desejado
+```
+
+Eventos logados por sessão, todos com `session_id` para correlação:
+
+| Evento | Dados |
+|---|---|
+| `session.started` | role (patient/doctor) |
+| `data.collected` | lista de campos coletados (sem valores clínicos) |
+| `model.prediction` | risk_level, probabilidades |
+| `llm.call.started` | agent_type, model, turn |
+| `llm.call.completed` | agent_type, input_tokens, output_tokens, elapsed_ms |
+| `qa.question` | turn da pergunta |
+
+Os valores clínicos individuais não são logados — apenas o resultado agregado (risco e probabilidades) — por serem dados de saúde sensíveis.
+
+---
+
+## 6. Testes Automatizados
 
 O projeto conta com 21 testes automatizados distribuídos em 4 módulos, executados via pytest:
 
@@ -140,10 +200,10 @@ O projeto conta com 21 testes automatizados distribuídos em 4 módulos, executa
 
 ---
 
-## 6. Conclusão
+## 7. Conclusão
 
 O Algoritmo Genético implementado neste projeto demonstrou capacidade de superar o GridSearch da Fase 1 na métrica clinicamente mais relevante: o recall da classe de alto risco passou de 0.9487 para 0.9744 no Experimento 1, com melhora adicional no F1-macro (de 0.9017 para 0.9070) e na accuracy (de 0.8987 para 0.9051). O AG convergiu para hiperparâmetros distintos dos encontrados pelo GridSearch — em particular, profundidade máxima limitada (`max_depth=15`) contra profundidade irrestrita (`max_depth=None`) — o que sugere que o espaço de busca contínuo explorado pelo AG, combinado com a validação cruzada estratificada como função fitness, favorece modelos com melhor generalização do que a grade discreta convencional.
 
-A integração com o Claude via Anthropic SDK adiciona uma camada de valor que vai além da otimização numérica: transforma probabilidades e importâncias de features em linguagem clínica acionável para o médico obstetra. A arquitetura de três prompts especializados — diagnóstico individual, relatório comparativo e Q&A contextualizado — cobre os principais casos de uso de um sistema de suporte à decisão clínica. O uso de um system prompt com diretrizes explícitas de comunicação médica (sem alarmismo, com indicação de avaliação presencial) é fundamental para adequar o comportamento do LLM ao contexto sensível de saúde.
+A integração com o Claude via Anthropic SDK vai além de uma camada de geração de texto: a arquitetura de agentes especializados (`PatientAgent` e `DoctorAgent`) permite que o mesmo modelo de classificação produza saídas radicalmente diferentes dependendo do perfil do usuário. O `PatientAgent` traduz probabilidades e importâncias de features em orientações práticas de vida, calibradas à urgência real do caso. O `DoctorAgent` entrega análise clínica estruturada com valores de referência, investigação sugerida e conduta recomendada — específica para os dados individuais da paciente, não genérica por classe de risco. O avaliador LLM-as-judge (`evaluator.py`) fornece feedback automático sobre a qualidade das respostas em rubrics distintos por perfil, viabilizando monitoramento contínuo da qualidade sem avaliação manual. A interface chatbot coleta dados conversacionalmente com validação fisiológica, oferecendo uma experiência mais natural que formulários estáticos tanto para pacientes quanto para profissionais de saúde.
 
-As limitações do projeto são três. Primeiro, o dataset é pequeno (~790 registros), o que limita a robustez estatística das comparações entre configurações do AG — diferenças de 0.005 no F1-macro podem não ser reproduzíveis em amostras diferentes. Segundo, o critério de parada do AG é fixo (número de gerações), sem critério de convergência adaptativo; os experimentos mostram que o best fitness se estabiliza por volta da geração 7-10 no Experimento 1, indicando que parte do tempo computacional é gasto sem progresso. Terceiro, as explicações geradas pelo LLM não passam por validação clínica formal: são plausíveis e bem estruturadas, mas não foram avaliadas por obstetras em estudo controlado, o que seria necessário antes de qualquer uso em ambiente clínico real.
+As limitações do projeto são três. Primeiro, o dataset é pequeno (~790 registros), o que limita a robustez estatística das comparações entre configurações do AG — diferenças de 0.005 no F1-macro podem não ser reproduzíveis em amostras diferentes. Segundo, o critério de parada do AG é fixo (número de gerações), sem critério de convergência adaptativo; os experimentos mostram que o best fitness se estabiliza por volta da geração 7-10 no Experimento 1, indicando que parte do tempo computacional é gasto sem progresso. Terceiro, as explicações geradas pelos agentes LLM não passam por validação clínica formal: são plausíveis e bem estruturadas, mas não foram avaliadas por obstetras em estudo controlado, o que seria necessário antes de qualquer uso em ambiente clínico real.
