@@ -1,0 +1,15 @@
+{
+  "name": "Experimento 3 — População Grande",
+  "description": "População maior e mais gerações para convergência mais precisa",
+  "config": {
+    "population_size": 60,
+    "generations": 30,
+    "mutation_rate": 0.1,
+    "crossover_rate": 0.9,
+    "elitism": true,
+    "tournament_size": 5,
+    "model": "RandomForest"
+  },
+  "results": null,
+  "status": "pending"
+}

@@ -1,0 +1,15 @@
+{
+  "name": "Experimento 2 — Alta Mutação (Exploração)",
+  "description": "Taxa de mutação elevada para aumentar diversidade e exploração do espaço de busca",
+  "config": {
+    "population_size": 30,
+    "generations": 20,
+    "mutation_rate": 0.3,
+    "crossover_rate": 0.8,
+    "elitism": true,
+    "tournament_size": 3,
+    "model": "RandomForest"
+  },
+  "results": null,
+  "status": "pending"
+}
