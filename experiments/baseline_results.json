@@ -1,0 +1,41 @@
+{
+  "logistic_regression": {
+    "accuracy": 0.6519,
+    "f1_macro": 0.6507,
+    "recall_low_risk": 0.6957,
+    "recall_mid_risk": 0.48,
+    "recall_high_risk": 0.7949,
+    "precision_macro": 0.646,
+    "roc_auc_macro_ovr": 0.8211,
+    "best_params": {
+      "model__C": "0.1"
+    }
+  },
+  "random_forest": {
+    "accuracy": 0.8987,
+    "f1_macro": 0.9017,
+    "recall_low_risk": 0.8841,
+    "recall_mid_risk": 0.88,
+    "recall_high_risk": 0.9487,
+    "precision_macro": 0.8994,
+    "roc_auc_macro_ovr": 0.9813,
+    "best_params": {
+      "model__max_depth": "None",
+      "model__min_samples_leaf": "1",
+      "model__n_estimators": "100"
+    }
+  },
+  "svm": {
+    "accuracy": 0.7152,
+    "f1_macro": 0.709,
+    "recall_low_risk": 0.7826,
+    "recall_mid_risk": 0.56,
+    "recall_high_risk": 0.7949,
+    "precision_macro": 0.7082,
+    "roc_auc_macro_ovr": 0.8728,
+    "best_params": {
+      "model__C": "100.0",
+      "model__gamma": "scale"
+    }
+  }
+}

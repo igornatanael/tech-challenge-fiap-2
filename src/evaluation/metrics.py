@@ -201,11 +201,10 @@ def _plot_confusion_matrix(
     ax.set_title(f"Matriz de Confusao — {nome}\n(normalizada por linha = recall por classe)")
     ax.set_xlabel("Predito")
     ax.set_ylabel("Real")
-    plt.tight_layout()
 
     if save_path:
-        plt.savefig(save_path, dpi=150, bbox_inches="tight")
-    plt.show()
+        fig.savefig(save_path, dpi=150, bbox_inches="tight")
+    plt.close("all")
 
 
 # ---------------------------------------------------------------------------
@@ -275,10 +274,9 @@ def plot_feature_importance(
     importancias.sort_values().plot(kind="barh", ax=ax, color="steelblue")
     ax.set_title(f"Feature Importance — Random Forest (top {top_n})")
     ax.set_xlabel("Importancia (reducao media de impureza de Gini)")
-    plt.tight_layout()
 
     if save_path:
-        plt.savefig(save_path, dpi=150, bbox_inches="tight")
-    plt.show()
+        fig.savefig(save_path, dpi=150, bbox_inches="tight")
+    plt.close("all")
 
     return importancias
