@@ -1,0 +1,12 @@
+.env
+.git
+.venv
+__pycache__
+*.pyc
+*.pyo
+.pytest_cache
+reports/
+tmp/
+notebooks/
+context/
+challenge-definitions/

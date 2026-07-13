@@ -2,18 +2,30 @@ FROM python:3.11-slim
 
 WORKDIR /app
 
-# Install dependencies
-COPY requirements.txt .
-RUN pip install --no-cache-dir -r requirements.txt
+# Dependências do sistema necessárias para compilar pacotes científicos
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    build-essential \
+    && rm -rf /var/lib/apt/lists/*
 
-# Copy source
+COPY requirements.txt .
+
+# Instala dependências exceto streamlit (não necessário no container de treino/teste)
+RUN grep -v "^streamlit" requirements.txt > requirements_server.txt \
+    && pip install --no-cache-dir -r requirements_server.txt \
+    && rm requirements_server.txt
+
+# Copia código e dados
 COPY src/ ./src/
 COPY data/ ./data/
-COPY notebooks/ ./notebooks/
+COPY tests/ ./tests/
 COPY experiments/ ./experiments/
 
-# Copy environment example (user must provide .env at runtime)
-COPY .env.example .env.example
+# Usuário não-root para segurança
+RUN useradd -m appuser && chown -R appuser /app
+USER appuser
 
-# Default command: run tests
-CMD ["pytest", "tests/", "-v"]
+# A chave de API deve ser injetada em tempo de execução via variável de ambiente:
+#   docker run -e ANTHROPIC_API_KEY=sk-ant-... <image>
+# Nunca incluir a chave no build ou no .env copiado para a imagem.
+
+CMD ["pytest", "tests/", "-v", "--tb=short"]
