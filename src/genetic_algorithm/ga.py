@@ -27,6 +27,7 @@ Uso:
 
 from __future__ import annotations
 
+import random
 import time
 from typing import Any
 
@@ -49,6 +50,7 @@ def run_genetic_algorithm(
     crossover_rate: float = 0.8,
     tournament_size: int = 3,
     elitism: bool = True,
+    random_state: int = 42,
     verbose: bool = True,
 ) -> dict[str, Any]:
     """
@@ -77,6 +79,7 @@ def run_genetic_algorithm(
         config          : configuração do experimento
         elapsed_seconds : tempo total de execução
     """
+    random.seed(random_state)
     start = time.time()
 
     # --- Inicialização ---
@@ -161,6 +164,7 @@ def run_genetic_algorithm(
             "crossover_rate":   crossover_rate,
             "tournament_size":  tournament_size,
             "elitism":          elitism,
+            "random_state":     random_state,
         },
         "elapsed_seconds": elapsed,
     }
