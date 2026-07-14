@@ -61,9 +61,12 @@
 📺 _Tela: `encoding.py` → `operators.py` → `ga.py`_
 
 **Representação do indivíduo** _(abrir encoding.py)_
-- Cada indivíduo = dicionário com 5 genes
-- `n_estimators`, `max_depth`, `min_samples_split`, `min_samples_leaf`, `max_features`
-- Cada gene tem tipo e bounds definidos em `SEARCH_SPACES`
+- Cada indivíduo = dicionário com 5 genes, cada um com tipo e bounds em `SEARCH_SPACES`:
+  - `n_estimators` — quantas árvores existem na floresta (10–200)
+  - `max_depth` — profundidade máxima de cada árvore — controla overfitting (3–30)
+  - `min_samples_split` — mínimo de amostras para dividir um nó (2–20)
+  - `min_samples_leaf` — mínimo de amostras em uma folha (1–10)
+  - `max_features` — quantas features considerar em cada divisão (`sqrt`, `log2` ou todas)
 
 **Por que esses operadores?**
 - A escolha dos operadores depende de como o indivíduo é representado
