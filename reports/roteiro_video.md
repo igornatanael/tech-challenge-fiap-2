@@ -88,7 +88,7 @@
 - Funciona porque os genes são independentes
 
 **Mutação**
-- 20% de chance por gene de receber um valor novo dentro dos bounds
+- 10% de chance por gene de receber um valor novo dentro dos bounds (no experimento padrão)
 - Ex: `max_depth=8` → muta para `max_depth=21`
 - Fundamental para explorar regiões que não existiam na população inicial
 
@@ -103,9 +103,9 @@
 📺 _Tela: Notebook 02 — curvas de convergência e tabela comparativa_
 
 **3 experimentos:**
-- Exp 1 (padrão): pop=30, 20 gerações, mutação=20%
-- Exp 2 (alta mutação): mais exploração
-- Exp 3 (pop grande): mais diversidade inicial
+- Exp 1 (padrão): pop=30, 20 gerações, mutação=0.10, cruzamento=0.80
+- Exp 2 (alta mutação): pop=30, 20 gerações, mutação=0.30, cruzamento=0.80
+- Exp 3 (pop grande): pop=60, 30 gerações, mutação=0.10, cruzamento=0.90
 
 **Curvas de convergência:**
 - Cada linha = um experimento ao longo das gerações
