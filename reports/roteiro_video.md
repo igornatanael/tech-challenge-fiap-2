@@ -8,202 +8,238 @@
 ---
 
 ## BLOCO 1 — Contexto e Problema (2 min)
+📺 _Tela: README.md no GitHub_
 
-**O que mostrar na tela:** README.md aberto no GitHub
+**Apresentação:**
+- Tech Challenge Fase 2 — PosTech IA para Devs da FIAP
 
-**Fala:**
+**Fase 1 (recap):**
+- Modelos de classificação de risco gestacional
+- Entrada: sinais vitais de uma gestante
+- Saída: baixo, médio ou alto risco
+- Vencedor: Random Forest — F1-macro 0.90, recall alto risco 0.9487
 
-> "Olá. Este é o Tech Challenge da Fase 2 do PosTech IA para Devs da FIAP.
->
-> Na Fase 1, construímos modelos de classificação de risco gestacional — dado um conjunto de sinais vitais de uma gestante, o modelo prevê se ela está em baixo, médio ou alto risco. O vencedor foi um Random Forest com F1-macro de 0.90 e recall de alto risco de 0.9487.
->
-> Na Fase 2, dois objetivos: primeiro, melhorar esse modelo usando Algoritmo Genético para otimizar os hiperparâmetros. Segundo, integrar o Claude da Anthropic para transformar os resultados numéricos em explicações em linguagem natural — adaptadas para médico ou para a própria paciente.
->
-> Vou mostrar o código, os experimentos e o produto final funcionando."
+**Fase 2 — dois objetivos:**
+1. Melhorar o modelo com Algoritmo Genético para otimizar hiperparâmetros
+2. Integrar o Claude da Anthropic para transformar resultados numéricos em linguagem natural — adaptado para médico ou paciente
+
+> _"Vou mostrar o código, os experimentos e o produto final funcionando."_
 
 ---
 
 ## BLOCO 2 — Estrutura do Projeto (1 min)
+📺 _Tela: `tree` da pasta no terminal ou VS Code_
 
-**O que mostrar na tela:** VS Code ou terminal com `tree` da pasta do projeto
+**Raiz:**
+- `app.py` — interface web Streamlit
+- `Dockerfile` — containerização
 
-**Fala:**
+**`data/`** — dataset UCI Maternal Health Risk (790 registros, 6 sinais vitais)
 
-> "A estrutura está organizada assim:"
->
-> "Na raiz temos o `app.py` — a interface web em Streamlit — e o `Dockerfile` para containerização."
->
-> "Em `data/` fica o dataset do UCI: Maternal Health Risk, com 790 registros e 6 sinais vitais."
->
-> "Em `src/` está todo o código de negócio, separado por responsabilidade:"
->
-> "— `pipelines/` cuida do carregamento e pré-processamento dos dados, incluindo o split treino/teste estratificado."
->
-> "— `models/` define os pipelines de classificação — Random Forest, Regressão Logística e SVM — com o scaler já encadeado."
->
-> "— `genetic_algorithm/` é o coração da Fase 2: `encoding.py` define os genes e os bounds de busca; `operators.py` implementa seleção por torneio, cruzamento uniforme e mutação; `fitness.py` avalia cada indivíduo com validação cruzada; e `ga.py` é o loop principal com elitismo."
->
-> "— `llm/` contém a integração com o Claude: `client.py` é o singleton que gerencia a conexão com a API da Anthropic; dentro de `agents/` temos `base_agent.py` com o histórico multi-turn, `patient_agent.py` e `doctor_agent.py` com os system prompts e guardrails especializados, e `evaluator.py` que funciona como LLM-as-judge."
->
-> "— `evaluation/` tem as métricas e os gráficos de avaliação dos modelos."
->
-> "— `observability/` tem o logger estruturado em JSON que registra cada evento da sessão."
->
-> "Os `notebooks/` documentam cada etapa em ordem: 01 é o baseline, 02 é o algoritmo genético, 03 é a integração com LLM."
->
-> "Em `experiments/` ficam os resultados dos 3 experimentos do AG salvos como JSON."
->
-> "E em `reports/figures/` estão os gráficos gerados — curvas de convergência, matrizes de confusão."
+**`src/`** — código separado por responsabilidade:
+- `pipelines/` — carregamento e pré-processamento, split estratificado
+- `models/` — pipelines de classificação (RF, LR, SVM) com scaler encadeado
+- `genetic_algorithm/` — coração da Fase 2:
+  - `encoding.py` — genes e bounds de busca
+  - `operators.py` — seleção, cruzamento, mutação
+  - `fitness.py` — avaliação com validação cruzada
+  - `ga.py` — loop principal com elitismo
+- `llm/agents/` — integração com Claude:
+  - `base_agent.py` — histórico multi-turn
+  - `patient_agent.py` / `doctor_agent.py` — agentes especializados
+  - `evaluator.py` — LLM-as-judge
+- `evaluation/` — métricas e gráficos
+- `observability/` — logger estruturado em JSON
+
+**`notebooks/`** — 01 baseline · 02 AG · 03 LLM
+
+**`experiments/`** — resultados dos 3 experimentos em JSON
 
 ---
 
 ## BLOCO 3 — Algoritmo Genético: Implementação (3 min)
+📺 _Tela: `encoding.py` → `operators.py` → `ga.py`_
 
-**O que mostrar na tela:** `src/genetic_algorithm/encoding.py` → `operators.py` → `ga.py`
+**Representação do indivíduo** _(abrir encoding.py)_
+- Cada indivíduo = dicionário com 5 genes
+- `n_estimators`, `max_depth`, `min_samples_split`, `min_samples_leaf`, `max_features`
+- Cada gene tem tipo e bounds definidos em `SEARCH_SPACES`
 
-**Fala:**
+**Por que esses operadores?**
+- A escolha dos operadores depende de como o indivíduo é representado
+- Aqui os genes são **independentes** — não há restrição de ordem entre eles
+- Diferente do TSP (Caixeiro Viajante), onde a solução é uma sequência de cidades e a ordem importa
+- No TSP você precisa de operadores que preservem a sequência — Ordered Crossover, Swap
+- Aqui podemos usar operadores mais diretos
 
-> "O Algoritmo Genético otimiza os hiperparâmetros do Random Forest. Cada indivíduo na população é um dicionário com 5 genes — n_estimators, max_depth, min_samples_split, min_samples_leaf e max_features — com bounds e tipos definidos aqui no SEARCH_SPACES."
->
-> "Antes de falar dos operadores, é importante entender por que escolhemos esses operadores específicos. A escolha depende diretamente de como o indivíduo é representado. No nosso caso, os genes são independentes entre si — não existe restrição de ordem entre eles. Isso é diferente do exemplo clássico de Algoritmos Genéticos, o Problema do Caixeiro Viajante, onde a solução é uma sequência de cidades e a ordem importa. Lá, você precisa de operadores que preservem essa ordem — como o Ordered Crossover e a mutação Swap. No nosso problema, como cada hiperparâmetro é independente dos outros, podemos usar operadores mais simples e diretos."
->
-> *(abrir operators.py)*
->
-> "O primeiro operador é a **seleção por torneio**. Em vez de ordenar toda a população por fitness, sorteamos 3 indivíduos aleatoriamente e o com maior F1-macro vence — e vira pai. Repetimos isso para escolher o segundo pai. A vantagem do torneio é que ele mantém diversidade na população: indivíduos medianos ainda têm chance de ser selecionados, o que evita que o AG convirja rápido demais para um ótimo local. A seleção por torneio funciona bem para qualquer tipo de problema — ela é a parte mais universal dos três operadores."
->
-> "O segundo é o **cruzamento uniforme**. Para cada gene do filho, sorteamos uma moeda — cara herda do pai 1, coroa herda do pai 2. Por exemplo: o pai 1 tem n_estimators 73 e max_depth 15; o pai 2 tem n_estimators 120 e max_depth 8. O filho pode herdar n_estimators 73 do pai 1 e max_depth 8 do pai 2 — uma combinação que nenhum dos dois tinha. Cada gene é decidido de forma independente, com 50% de chance de vir de cada pai. Essa independência é exatamente o que nos permite usar o cruzamento uniforme — ela seria problemática no TSP, onde trocar genes de forma independente quebraria a sequência de cidades."
->
-> "O terceiro é a **mutação**. Com probabilidade de 20% por gene, o valor é substituído por um novo valor aleatório dentro dos bounds daquele gene. Por exemplo, um max_depth que era 8 pode mutar para 21. A mutação é fundamental para que o AG explore regiões do espaço que não existiam na população inicial — sem ela, o algoritmo só recombinaria o que já tem, nunca descobrindo valores inéditos."
->
-> *(abrir ga.py, mostrar o loop)*
->
-> "O loop principal usa elitismo — o melhor indivíduo global nunca é perdido entre gerações. E a função fitness avalia cada indivíduo com StratifiedKFold de 5 folds, usando F1-macro como critério — importante porque o problema é multiclasse e a classe de alto risco é crítica."
+**Seleção por torneio** _(abrir operators.py)_
+- Sorteia 3 indivíduos aleatoriamente
+- O com maior F1-macro vence e vira pai
+- Repete para o segundo pai
+- Mantém diversidade: indivíduos medianos ainda têm chance — evita convergência prematura
+
+**Cruzamento uniforme**
+- Para cada gene do filho: sorteia de qual pai herda (50/50)
+- Ex: pai 1 tem `n_estimators=73`, pai 2 tem `max_depth=8` → filho herda os dois
+- Gera combinações que nenhum dos pais tinha
+- Funciona porque os genes são independentes
+
+**Mutação**
+- 20% de chance por gene de receber um valor novo dentro dos bounds
+- Ex: `max_depth=8` → muta para `max_depth=21`
+- Fundamental para explorar regiões que não existiam na população inicial
+
+**Loop principal** _(abrir ga.py)_
+- Elitismo: o melhor indivíduo global nunca é perdido entre gerações
+- Fitness: StratifiedKFold 5 folds com F1-macro
+  - Problema multiclasse + classe de alto risco crítica → F1-macro é a métrica certa
 
 ---
 
 ## BLOCO 4 — Algoritmo Genético: Resultados (2 min)
+📺 _Tela: Notebook 02 — curvas de convergência e tabela comparativa_
 
-**O que mostrar na tela:** Notebook 02 executado — curvas de convergência e tabela comparativa
+**3 experimentos:**
+- Exp 1 (padrão): pop=30, 20 gerações, mutação=20%
+- Exp 2 (alta mutação): mais exploração
+- Exp 3 (pop grande): mais diversidade inicial
 
-**Fala:**
+**Curvas de convergência:**
+- Cada linha = um experimento ao longo das gerações
+- Linha vermelha pontilhada = baseline GridSearch
+- Todos superaram o baseline
+- Melhoria concentrada nas primeiras gerações
 
-> "Rodamos 3 experimentos variando as configurações do AG. O Experimento 1 usou a configuração padrão — população de 30 indivíduos, 20 gerações, taxa de mutação de 20%. O Experimento 2 aumentou a taxa de mutação para forçar mais exploração. O Experimento 3 dobrou o tamanho da população para ver se mais diversidade inicial ajudava."
->
-> "Aqui estão as curvas de convergência — cada linha mostra como o melhor fitness evoluiu ao longo das gerações em cada experimento. A linha vermelha pontilhada é o baseline do GridSearch. Dá pra ver que todos os experimentos superaram o baseline, e que a melhoria acontece principalmente nas primeiras gerações — sinal de que o espaço de busca não é tão complexo a ponto de precisar de muitas gerações."
->
-> *(rolar até a tabela comparativa)*
->
-> "O Experimento 1 foi o melhor. F1-macro subiu de 0.9017 para 0.9070, e o recall de alto risco — que é a métrica mais importante clinicamente, porque errar um caso grave tem consequências sérias — subiu de 0.9487 para 0.9744."
->
-> "O que o AG encontrou de diferente do GridSearch? Árvores menores: max_depth 15 em vez de sem limite, n_estimators 73 em vez de 100. O GridSearch nunca testaria 73 árvores — ele só testa os valores que você listou explicitamente na grade. O AG buscou num espaço contínuo entre 10 e 200 e convergiu para 73. A validação cruzada de 5 folds dentro da função fitness penalizou overfitting de forma mais eficaz do que a avaliação estática do GridSearch. Os resultados completos de cada experimento ficaram salvos em JSON aqui em `experiments/`."
+**Resultados** _(rolar até a tabela)_
+
+| | GridSearch | AG Exp 1 |
+|---|---|---|
+| F1-macro | 0.9017 | **0.9070** |
+| Recall alto risco | 0.9487 | **0.9744** |
+| n_estimators | 100 | 73 |
+| max_depth | irrestrito | 15 |
+
+**O que o AG descobriu que o GridSearch não encontraria:**
+- `n_estimators=73` — GridSearch nunca testaria esse valor, só os da grade
+- `max_depth=15` — árvores menores, menos overfitting
+- O AG buscou num espaço contínuo (10–200) e convergiu para 73
+- Resultados salvos em JSON em `experiments/`
 
 ---
 
 ## BLOCO 5 — Arquitetura LLM (1,5 min)
+📺 _Tela: `src/llm/agents/` — abrir `base_agent.py`, depois `patient_agent.py` e `doctor_agent.py` lado a lado_
 
-**O que mostrar na tela:** `src/llm/agents/` — mostrar os arquivos, abrir `base_agent.py` e depois `patient_agent.py` e `doctor_agent.py` lado a lado
+**Modelo:** Claude Sonnet 4.6 (Anthropic)
 
-**Fala:**
+**BaseAgent** _(abrir base_agent.py)_
+- Mantém lista de mensagens — o histórico da conversa
+- Cada chamada a `chat()` inclui o histórico completo
+- O agente sabe o que foi dito antes — contexto persistente na sessão
+- Loga tokens e latência de cada chamada
 
-> "Para a integração com LLM, usamos o Claude da Anthropic — especificamente o claude-sonnet-4-6. A arquitetura é baseada em dois agentes especializados que herdam de uma classe base comum."
->
-> *(abrir base_agent.py)*
->
-> "O `BaseAgent` é a fundação. Ele mantém uma lista de mensagens — o histórico da conversa. Toda vez que o método `chat()` é chamado, ele inclui o histórico completo na requisição para o Claude. Isso é o que permite que o agente mantenha contexto ao longo de uma sessão — ele sabe o que foi perguntado e respondido antes. Também registra em log cada chamada com tokens consumidos e latência."
->
-> *(abrir patient_agent.py e doctor_agent.py lado a lado)*
->
-> "Os dois agentes especializados diferem principalmente nos system prompts — a instrução que define o comportamento do modelo. O `PatientAgent` usa linguagem acessível, sem jargão médico, e tem guardrails explícitos no prompt: não prescreve medicamentos, não faz diagnóstico definitivo, sempre orienta a buscar atendimento presencial. O `DoctorAgent` usa terminologia clínica, tem valores de referência embutidos no system prompt — como PA acima de 140/90 indica hipertensão, glicemia acima de 7.0 indica diabetes — e estrutura a resposta em 4 seções: análise do modelo, avaliação clínica, investigação sugerida e conduta recomendada."
->
-> "Além dos dois agentes, temos o `evaluator.py` — um LLM-as-judge. Ele usa o próprio Claude para avaliar a qualidade das respostas geradas, com rubricas diferentes para cada perfil. Para o PatientAgent avalia clareza, tom adequado e acionabilidade. Para o DoctorAgent avalia precisão clínica, completude e terminologia. Isso permite medir objetivamente a qualidade das respostas sem depender de avaliação humana para cada caso."
+**Dois agentes especializados** — diferem no system prompt:
+
+- `PatientAgent`:
+  - Linguagem acessível, sem jargão
+  - Guardrails: não prescreve, não faz diagnóstico definitivo, orienta atendimento presencial
+
+- `DoctorAgent`:
+  - Terminologia clínica
+  - Valores de referência embutidos no prompt (PA ≥140/90, glicemia ≥7.0...)
+  - Resposta estruturada em 4 seções: análise do modelo · avaliação clínica · investigação · conduta
+
+**Evaluator** _(abrir evaluator.py)_
+- LLM-as-judge: o próprio Claude avalia as respostas
+- Rubricas distintas por perfil:
+  - Paciente: clareza, tom, acionabilidade
+  - Médico: precisão clínica, completude, terminologia
+- Permite avaliar qualidade sem revisão humana caso a caso
 
 ---
 
 ## BLOCO 6 — Demo ao vivo: Paciente (3 min)
+📺 _Tela: http://localhost:8501_
 
-**O que mostrar na tela:** App Streamlit em http://localhost:8501
+- Clicar **"Iniciar Avaliação"**
+- Responder **"paciente"**
 
-**Fala:**
+**Inserir dados de alto risco:**
+| Campo | Valor |
+|---|---|
+| Idade | 48 |
+| Sistólica | 160 |
+| Diastólica | 100 |
+| Glicemia | 15.0 |
+| Temperatura | 38.5 |
+| Freq. Cardíaca | 105 |
 
-> "Agora a demo ao vivo. Essa é a interface — um chatbot que coleta os dados da paciente conversacionalmente."
->
-> *(clicar em "Iniciar Avaliação")*
->
-> "O bot pergunta primeiro se é médico ou paciente. Vou simular uma paciente."
->
-> *(digitar "paciente")*
->
-> "Agora ele coleta os dados um a um. Vou inserir o perfil de uma paciente de alto risco para mostrar a validação e o diagnóstico."
->
-> *(inserir: Idade 48 → Sistólica 160 → Diastólica 100 → Glicemia 15.0 → Temperatura 38.5 → FC 105)*
->
-> "Perceba que se eu tentar colocar um valor fora dos limites fisiológicos ele rejeita e explica o motivo. E aqui a cross-validação — diastólica tem que ser menor que a sistólica."
->
-> *(aguardar diagnóstico do PatientAgent aparecer)*
->
-> "A resposta do PatientAgent é em linguagem simples — não cita probabilidades, traduz os achados em orientações práticas. E no fim pergunta se tem dúvidas. Vou fazer uma pergunta."
->
-> *(digitar: "Preciso ir ao hospital hoje ou posso esperar a consulta de amanhã?")*
->
-> "A resposta é contextualizada com os dados desta paciente específica — não é uma resposta genérica de alto risco."
+- Mostrar **validação de range** — tentar valor inválido, ver rejeição
+- Mostrar **cross-validação** — diastólica menor que sistólica
+- Aguardar resposta do PatientAgent:
+  - Linguagem simples, sem probabilidades
+  - Orientações práticas
+- Digitar: _"Preciso ir ao hospital hoje ou posso esperar a consulta de amanhã?"_
+  - Resposta contextualizada com os dados desta paciente — não é resposta genérica
 
 ---
 
 ## BLOCO 7 — Demo ao vivo: Médico (2 min)
+📺 _Tela: App Streamlit — nova avaliação_
 
-**O que mostrar na tela:** App Streamlit — nova avaliação
+- Clicar **"Nova Avaliação"**
+- Responder **"médico"**
+- Inserir os **mesmos dados** da paciente anterior
 
-**Fala:**
+- Aguardar resposta do DoctorAgent:
+  - 4 seções clínicas estruturadas
+  - Cruza PA 160/100 + idade 48 → suspeita de pré-eclâmpsia grave
+  - Exames específicos sugeridos
+  - Conduta com nível de urgência
 
-> "Agora vou mostrar o fluxo para médico com o mesmo perfil de paciente."
->
-> *(clicar "Nova Avaliação", digitar "médico", inserir mesmos dados)*
->
-> *(aguardar diagnóstico do DoctorAgent)*
->
-> "Compare com a resposta anterior. O DoctorAgent estrutura em seções clínicas: análise do modelo com feature importance, avaliação dos achados — aqui ele cruza a PA 160/100 com a idade de 48 anos e aponta suspeita de pré-eclâmpsia grave. Investigação sugerida com exames específicos para o caso. E conduta recomendada com nível de urgência."
->
-> *(digitar: "Qual o risco de síndrome HELLP considerando esses achados?")*
->
-> "As perguntas de follow-up têm o contexto completo da sessão — o agente sabe os dados da paciente e o diagnóstico anterior."
+- Digitar: _"Qual o risco de síndrome HELLP considerando esses achados?"_
+  - O agente tem contexto completo da sessão — sabe os dados e o diagnóstico anterior
 
 ---
 
 ## BLOCO 8 — Observabilidade e Testes (1 min)
+📺 _Tela: `tail -f logs/app.log` → `pytest tests/ -v`_
 
-**O que mostrar na tela:** terminal com `tail -f logs/app.log` e depois `pytest tests/ -v`
+**Logs** _(mostrar terminal com tail)_
+- JSON estruturado, um evento por linha
+- `session_id` correlaciona todos os eventos da sessão:
+  - `session.started` · `data.collected` · `model.prediction` · `llm.call.completed`
+- Tokens e latência em cada chamada ao Claude
+- Dados clínicos **não são logados** — só metadados
+- Plugável: adicionar Datadog, CloudWatch ou GCP Logging = um handler em `setup_logging()`
 
-**Fala:**
-
-> "Cada sessão gera logs estruturados em JSON — um evento por linha. Aqui dá pra ver o `session_id` correlacionando todos os eventos de uma mesma sessão: o início, a coleta de cada campo, a predição do modelo com o nível de risco e as probabilidades, e cada chamada ao Claude com o número de tokens consumidos e a latência em milissegundos."
->
-> "O design foi feito para ser plugável: o logger local escreve em arquivo e em stdout. Para adicionar observabilidade em nuvem — Datadog, CloudWatch, GCP Logging — basta adicionar um handler aqui em `setup_logging()`. Nenhuma linha de código de negócio precisa mudar."
->
-> "Importante: os dados clínicos da paciente não são logados — apenas metadados da sessão e métricas de performance."
->
-> *(mudar para pytest)*
->
-> "21 testes automatizados em 4 arquivos. `test_encoding.py` valida a codificação dos genes e os bounds. `test_operators.py` valida seleção, cruzamento e mutação — inclusive que o cruzamento uniforme sempre produz genes dentro dos bounds dos pais. `test_ga.py` valida o loop principal e o elitismo. `test_prompts.py` valida a construção dos prompts dos agentes. Todos passando."
+**Testes** _(mudar para pytest)_
+- 21 testes em 4 arquivos:
+  - `test_encoding.py` — genes e bounds
+  - `test_operators.py` — seleção, cruzamento, mutação
+  - `test_ga.py` — loop principal e elitismo
+  - `test_prompts.py` — construção dos prompts
+- Todos passando
 
 ---
 
 ## BLOCO 9 — Encerramento (30 seg)
+📺 _Tela: README no GitHub_
 
-**O que mostrar na tela:** README no GitHub
+- Repositório no GitHub com código, notebooks executados, experimentos e relatório técnico
+- Para rodar:
+  1. Clonar o repositório
+  2. Criar ambiente virtual e instalar dependências
+  3. Configurar `ANTHROPIC_API_KEY` no `.env`
+  4. `streamlit run app.py`
 
-**Fala:**
-
-> "O repositório está no GitHub com todo o código, os notebooks executados, os resultados dos experimentos e o relatório técnico. Para rodar: clonar, criar o ambiente virtual, instalar as dependências, configurar a chave da API Anthropic no .env e rodar `streamlit run app.py`.
->
-> Obrigado."
+> _"Obrigado."_
 
 ---
 
 ## Dicas de Gravação
 
-- **Antes de gravar:** deixar o app já rodando (`streamlit run app.py`) e o terminal com `tail -f logs/app.log` aberto numa segunda janela
+- **Antes de gravar:** app rodando (`streamlit run app.py`) + terminal com `tail -f logs/app.log` numa segunda janela
 - **Resolução:** 1920×1080
-- **Fonte do VS Code:** aumentar para pelo menos 16pt para legibilidade no vídeo
-- **Paciente de demo sugerida para alto risco:** Idade=48, Sistólica=160, Diastólica=100, Glicemia=15.0, Temperatura=38.5°C, FC=105 — garante classificação de alto risco com confiança alta
-- **Paciente de demo sugerida para baixo risco:** Idade=25, Sistólica=90, Diastólica=60, Glicemia=6.0, Temperatura=36.8°C, FC=76
-- **Não mostrar o arquivo `.env` nem a chave de API em nenhum momento**
+- **Fonte VS Code:** mínimo 16pt
+- **Não mostrar o `.env` nem a chave de API em nenhum momento**
