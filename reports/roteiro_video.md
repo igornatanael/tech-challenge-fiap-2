@@ -29,11 +29,35 @@
 
 **Fala:**
 
-> "A estrutura está organizada assim: dentro de `src` temos os módulos separados por responsabilidade — pipelines de dados, modelos baseline, algoritmo genético e a camada de LLM com os agentes. Os notebooks documentam cada etapa em ordem. Os resultados dos experimentos ficam em `experiments` como JSON. E o `app.py` é a interface web."
+> "A estrutura está organizada assim:"
+>
+> "Na raiz temos o `app.py` — a interface web em Streamlit — e o `Dockerfile` para containerização."
+>
+> "Em `data/` fica o dataset do UCI: Maternal Health Risk, com 790 registros e 6 sinais vitais."
+>
+> "Em `src/` está todo o código de negócio, separado por responsabilidade:"
+>
+> "— `pipelines/` cuida do carregamento e pré-processamento dos dados, incluindo o split treino/teste estratificado."
+>
+> "— `models/` define os pipelines de classificação — Random Forest, Regressão Logística e SVM — com o scaler já encadeado."
+>
+> "— `genetic_algorithm/` é o coração da Fase 2: `encoding.py` define os genes e os bounds de busca; `operators.py` implementa seleção por torneio, cruzamento uniforme e mutação; `fitness.py` avalia cada indivíduo com validação cruzada; e `ga.py` é o loop principal com elitismo."
+>
+> "— `llm/` contém a integração com o Claude: `client.py` é o singleton que gerencia a conexão com a API da Anthropic; dentro de `agents/` temos `base_agent.py` com o histórico multi-turn, `patient_agent.py` e `doctor_agent.py` com os system prompts e guardrails especializados, e `evaluator.py` que funciona como LLM-as-judge."
+>
+> "— `evaluation/` tem as métricas e os gráficos de avaliação dos modelos."
+>
+> "— `observability/` tem o logger estruturado em JSON que registra cada evento da sessão."
+>
+> "Os `notebooks/` documentam cada etapa em ordem: 01 é o baseline, 02 é o algoritmo genético, 03 é a integração com LLM."
+>
+> "Em `experiments/` ficam os resultados dos 3 experimentos do AG salvos como JSON."
+>
+> "E em `reports/figures/` estão os gráficos gerados — curvas de convergência, matrizes de confusão."
 
 ---
 
-## BLOCO 3 — Algoritmo Genético: Implementação (2 min)
+## BLOCO 3 — Algoritmo Genético: Implementação (3 min)
 
 **O que mostrar na tela:** `src/genetic_algorithm/encoding.py` → `operators.py` → `ga.py`
 
@@ -41,13 +65,19 @@
 
 > "O Algoritmo Genético otimiza os hiperparâmetros do Random Forest. Cada indivíduo na população é um dicionário com 5 genes — n_estimators, max_depth, min_samples_split, min_samples_leaf e max_features — com bounds e tipos definidos aqui no SEARCH_SPACES."
 >
+> "Antes de falar dos operadores, é importante entender por que escolhemos esses operadores específicos. A escolha depende diretamente de como o indivíduo é representado. No nosso caso, os genes são independentes entre si — não existe restrição de ordem entre eles. Isso é diferente do exemplo clássico de Algoritmos Genéticos, o Problema do Caixeiro Viajante, onde a solução é uma sequência de cidades e a ordem importa. Lá, você precisa de operadores que preservem essa ordem — como o Ordered Crossover e a mutação Swap. No nosso problema, como cada hiperparâmetro é independente dos outros, podemos usar operadores mais simples e diretos."
+>
 > *(abrir operators.py)*
 >
-> "Os operadores são: seleção por torneio — pegamos 3 candidatos aleatórios e o melhor vira pai. Cruzamento uniforme — cada gene do filho é herdado de um dos pais com probabilidade 0.5. Mutação por gene — com probabilidade configurável, o gene recebe um novo valor dentro dos bounds."
+> "O primeiro operador é a **seleção por torneio**. Em vez de ordenar toda a população por fitness, sorteamos 3 indivíduos aleatoriamente e o com maior F1-macro vence — e vira pai. Repetimos isso para escolher o segundo pai. A vantagem do torneio é que ele mantém diversidade na população: indivíduos medianos ainda têm chance de ser selecionados, o que evita que o AG convirja rápido demais para um ótimo local. A seleção por torneio funciona bem para qualquer tipo de problema — ela é a parte mais universal dos três operadores."
+>
+> "O segundo é o **cruzamento uniforme**. Para cada gene do filho, sorteamos uma moeda — cara herda do pai 1, coroa herda do pai 2. Por exemplo: o pai 1 tem n_estimators 73 e max_depth 15; o pai 2 tem n_estimators 120 e max_depth 8. O filho pode herdar n_estimators 73 do pai 1 e max_depth 8 do pai 2 — uma combinação que nenhum dos dois tinha. Cada gene é decidido de forma independente, com 50% de chance de vir de cada pai. Essa independência é exatamente o que nos permite usar o cruzamento uniforme — ela seria problemática no TSP, onde trocar genes de forma independente quebraria a sequência de cidades."
+>
+> "O terceiro é a **mutação**. Com probabilidade de 20% por gene, o valor é substituído por um novo valor aleatório dentro dos bounds daquele gene. Por exemplo, um max_depth que era 8 pode mutar para 21. A mutação é fundamental para que o AG explore regiões do espaço que não existiam na população inicial — sem ela, o algoritmo só recombinaria o que já tem, nunca descobrindo valores inéditos."
 >
 > *(abrir ga.py, mostrar o loop)*
 >
-> "O loop principal usa elitismo — o melhor indivíduo global nunca é perdido. A função fitness avalia cada indivíduo com StratifiedKFold de 5 folds, usando F1-macro como critério — importante porque o problema é multiclasse e a classe de alto risco é crítica."
+> "O loop principal usa elitismo — o melhor indivíduo global nunca é perdido entre gerações. E a função fitness avalia cada indivíduo com StratifiedKFold de 5 folds, usando F1-macro como critério — importante porque o problema é multiclasse e a classe de alto risco é crítica."
 
 ---
 
@@ -57,13 +87,15 @@
 
 **Fala:**
 
-> "Rodamos 3 experimentos com configurações diferentes. Aqui estão as curvas de convergência — cada linha é um experimento, a linha vermelha pontilhada é o baseline do GridSearch."
+> "Rodamos 3 experimentos variando as configurações do AG. O Experimento 1 usou a configuração padrão — população de 30 indivíduos, 20 gerações, taxa de mutação de 20%. O Experimento 2 aumentou a taxa de mutação para forçar mais exploração. O Experimento 3 dobrou o tamanho da população para ver se mais diversidade inicial ajudava."
+>
+> "Aqui estão as curvas de convergência — cada linha mostra como o melhor fitness evoluiu ao longo das gerações em cada experimento. A linha vermelha pontilhada é o baseline do GridSearch. Dá pra ver que todos os experimentos superaram o baseline, e que a melhoria acontece principalmente nas primeiras gerações — sinal de que o espaço de busca não é tão complexo a ponto de precisar de muitas gerações."
 >
 > *(rolar até a tabela comparativa)*
 >
-> "O Experimento 1 — configuração padrão, população 30, 20 gerações — foi o melhor. F1-macro subiu de 0.9017 para 0.9070, e o recall de alto risco, que é a métrica mais importante clinicamente, subiu de 0.9487 para 0.9744."
+> "O Experimento 1 foi o melhor. F1-macro subiu de 0.9017 para 0.9070, e o recall de alto risco — que é a métrica mais importante clinicamente, porque errar um caso grave tem consequências sérias — subiu de 0.9487 para 0.9744."
 >
-> "O que o AG encontrou de diferente do GridSearch? Árvores menores: max_depth 15 em vez de irrestrito, n_estimators 73 em vez de 100. A validação cruzada penalizou overfitting de forma mais eficaz do que a grade estática. Os resultados ficaram em JSON aqui em `experiments/`."
+> "O que o AG encontrou de diferente do GridSearch? Árvores menores: max_depth 15 em vez de sem limite, n_estimators 73 em vez de 100. O GridSearch nunca testaria 73 árvores — ele só testa os valores que você listou explicitamente na grade. O AG buscou num espaço contínuo entre 10 e 200 e convergiu para 73. A validação cruzada de 5 folds dentro da função fitness penalizou overfitting de forma mais eficaz do que a avaliação estática do GridSearch. Os resultados completos de cada experimento ficaram salvos em JSON aqui em `experiments/`."
 
 ---
 
@@ -73,11 +105,17 @@
 
 **Fala:**
 
-> "Para a integração com LLM, a arquitetura usa dois agentes especializados que herdam de uma classe base. O BaseAgent mantém o histórico de conversa multi-turn — cada chamada a `chat()` inclui todo o histórico, permitindo que o agente mantenha contexto ao longo de uma sessão."
+> "Para a integração com LLM, usamos o Claude da Anthropic — especificamente o claude-sonnet-4-6. A arquitetura é baseada em dois agentes especializados que herdam de uma classe base comum."
 >
-> "O PatientAgent usa linguagem acessível, sem jargão, e tem guardrails explícitos — não prescreve medicamentos, não extrapola o escopo. O DoctorAgent usa terminologia clínica, inclui valores de referência no system prompt e estrutura a resposta em 4 seções: análise do modelo, avaliação clínica, investigação sugerida e conduta."
+> *(abrir base_agent.py)*
 >
-> "Além disso, temos um avaliador — LLM-as-judge — que usa o próprio Claude para avaliar a qualidade das respostas com rubrics distintos por perfil."
+> "O `BaseAgent` é a fundação. Ele mantém uma lista de mensagens — o histórico da conversa. Toda vez que o método `chat()` é chamado, ele inclui o histórico completo na requisição para o Claude. Isso é o que permite que o agente mantenha contexto ao longo de uma sessão — ele sabe o que foi perguntado e respondido antes. Também registra em log cada chamada com tokens consumidos e latência."
+>
+> *(abrir patient_agent.py e doctor_agent.py lado a lado)*
+>
+> "Os dois agentes especializados diferem principalmente nos system prompts — a instrução que define o comportamento do modelo. O `PatientAgent` usa linguagem acessível, sem jargão médico, e tem guardrails explícitos no prompt: não prescreve medicamentos, não faz diagnóstico definitivo, sempre orienta a buscar atendimento presencial. O `DoctorAgent` usa terminologia clínica, tem valores de referência embutidos no system prompt — como PA acima de 140/90 indica hipertensão, glicemia acima de 7.0 indica diabetes — e estrutura a resposta em 4 seções: análise do modelo, avaliação clínica, investigação sugerida e conduta recomendada."
+>
+> "Além dos dois agentes, temos o `evaluator.py` — um LLM-as-judge. Ele usa o próprio Claude para avaliar a qualidade das respostas geradas, com rubricas diferentes para cada perfil. Para o PatientAgent avalia clareza, tom adequado e acionabilidade. Para o DoctorAgent avalia precisão clínica, completude e terminologia. Isso permite medir objetivamente a qualidade das respostas sem depender de avaliação humana para cada caso."
 
 ---
 
@@ -137,11 +175,15 @@
 
 **Fala:**
 
-> "Cada sessão gera logs estruturados em JSON. Aqui dá pra ver o session_id correlacionando todos os eventos — início da sessão, coleta dos dados, predição do modelo e cada chamada ao Claude com tokens consumidos e latência. O design permite plugar qualquer ferramenta de observabilidade cloud sem mudar o código."
+> "Cada sessão gera logs estruturados em JSON — um evento por linha. Aqui dá pra ver o `session_id` correlacionando todos os eventos de uma mesma sessão: o início, a coleta de cada campo, a predição do modelo com o nível de risco e as probabilidades, e cada chamada ao Claude com o número de tokens consumidos e a latência em milissegundos."
+>
+> "O design foi feito para ser plugável: o logger local escreve em arquivo e em stdout. Para adicionar observabilidade em nuvem — Datadog, CloudWatch, GCP Logging — basta adicionar um handler aqui em `setup_logging()`. Nenhuma linha de código de negócio precisa mudar."
+>
+> "Importante: os dados clínicos da paciente não são logados — apenas metadados da sessão e métricas de performance."
 >
 > *(mudar para pytest)*
 >
-> "21 testes automatizados cobrindo a codificação genética, os operadores do AG, o loop principal e a construção dos prompts. Todos passando."
+> "21 testes automatizados em 4 arquivos. `test_encoding.py` valida a codificação dos genes e os bounds. `test_operators.py` valida seleção, cruzamento e mutação — inclusive que o cruzamento uniforme sempre produz genes dentro dos bounds dos pais. `test_ga.py` valida o loop principal e o elitismo. `test_prompts.py` valida a construção dos prompts dos agentes. Todos passando."
 
 ---
 
