@@ -100,33 +100,39 @@
 ---
 
 ## BLOCO 4 — Algoritmo Genético: Resultados (2 min)
-📺 _Tela: Notebook 02 — curvas de convergência e tabela comparativa_
+📺 _Tela: Notebook 02 aberto e executado_
 
-**3 experimentos:**
-- Exp 1 (padrão): pop=30, 20 gerações, mutação=0.10, cruzamento=0.80
-- Exp 2 (alta mutação): pop=30, 20 gerações, mutação=0.30, cruzamento=0.80
-- Exp 3 (pop grande): pop=60, 30 gerações, mutação=0.10, cruzamento=0.90
+**Apontar a tabela de configurações no topo do notebook (célula de introdução):**
+- 3 experimentos com parâmetros diferentes lado a lado
+- Exp 1 (padrão): pop=30, gen=20, mut=0.10, cross=0.80
+- Exp 2 (alta mutação): pop=30, gen=20, mut=0.30, cross=0.80
+- Exp 3 (pop grande): pop=60, gen=30, mut=0.10, cross=0.90
 
-**Curvas de convergência:**
-- Cada linha = um experimento ao longo das gerações
-- Linha vermelha pontilhada = baseline GridSearch
-- Todos superaram o baseline
-- Melhoria concentrada nas primeiras gerações
+**Rolar até a célula 6 — gráfico de convergência** (`ga_convergence.png`)
+- Gráfico da esquerda: melhor fitness global por geração
+  - Cada linha colorida = um experimento
+  - Linha vermelha pontilhada = baseline GridSearch (0.9017)
+  - Todos os experimentos cruzam a linha vermelha — todos superaram o GridSearch
+  - A melhoria acontece principalmente nas primeiras gerações
+- Gráfico da direita: fitness médio da população
+  - Mostra que a população como um todo melhora, não só o melhor indivíduo
 
-**Resultados** _(rolar até a tabela)_
+**Rolar até a célula 9 — tabela comparativa**
+- Apontar as colunas `f1_macro` e `recall_high_risk`
 
 | | GridSearch | AG Exp 1 |
 |---|---|---|
 | F1-macro | 0.9017 | **0.9070** |
 | Recall alto risco | 0.9487 | **0.9744** |
-| n_estimators | 100 | 73 |
-| max_depth | irrestrito | 15 |
 
-**O que o AG descobriu que o GridSearch não encontraria:**
-- `n_estimators=73` — GridSearch nunca testaria esse valor, só os da grade
-- `max_depth=15` — árvores menores, menos overfitting
-- O AG buscou num espaço contínuo (10–200) e convergiu para 73
-- Resultados salvos em JSON em `experiments/`
+- Recall de alto risco é a métrica mais importante — errar um caso grave tem consequências sérias
+
+**O que o AG encontrou que o GridSearch não encontraria:**
+- `n_estimators=73` — GridSearch só testa valores da grade; AG buscou entre 10 e 200
+- `max_depth=15` — árvores menores, menos overfitting que max_depth irrestrito
+
+**Apontar pasta `experiments/` no VS Code**
+- 3 arquivos JSON com histórico completo de cada experimento — geração a geração
 
 ---
 
