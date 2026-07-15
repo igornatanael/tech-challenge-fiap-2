@@ -100,34 +100,30 @@
 ---
 
 ## BLOCO 4 — Algoritmo Genético: Resultados (2 min)
-📺 _Tela: `reports/figures/` aberto no Finder ou VS Code_
+📺 _Tela: Notebook 02 — célula 9 (tabela comparativa)_
 
-**3 experimentos — mencionar as configurações:**
+**3 experimentos — configurações:**
 - Exp 1 (padrão): pop=30, gen=20, mut=0.10, cross=0.80
 - Exp 2 (alta mutação): pop=30, gen=20, mut=0.30, cross=0.80
 - Exp 3 (pop grande): pop=60, gen=30, mut=0.10, cross=0.90
 
-**Abrir `ga_convergence.png`**
-- Gráfico da esquerda — melhor fitness global por geração:
-  - Cada linha colorida = um experimento
-  - Linha vermelha pontilhada = baseline GridSearch (0.9017)
-  - Todos os experimentos cruzam a linha vermelha — todos superaram o GridSearch
-  - Melhoria concentrada nas primeiras gerações
-- Gráfico da direita — fitness médio da população:
-  - A população inteira melhora, não só o melhor indivíduo
+**Apontar a tabela comparativa (célula 9):**
 
-**Resultados finais — Exp 1 foi o melhor:**
+| modelo | f1_macro | recall_high_risk | accuracy |
+|---|---|---|---|
+| Baseline (GridSearch) | 0.9017 | 0.9487 | 0.8987 |
+| **AG Exp 1 — Padrão** | **0.9070** | **0.9744** | **0.9051** |
+| AG Exp 2 — Alta Mutação | 0.9017 | 0.9487 | 0.8987 |
+| AG Exp 3 — Pop. Grande | 0.9013 | 0.9744 | 0.8987 |
 
-| | GridSearch | AG Exp 1 |
-|---|---|---|
-| F1-macro | 0.9017 | **0.9070** |
-| Recall alto risco | 0.9487 | **0.9744** |
+- **Exp 1 é o único que melhorou em todas as métricas**
+- Exp 2 encontrou os mesmos hiperparâmetros do baseline — alta mutação dificultou a convergência
+- Exp 3 melhorou o recall mas perdeu levemente no F1
 
-- Recall de alto risco é a métrica mais importante — errar um caso grave tem consequências sérias
-
-**Abrir `ga_confusion_exp1_padrao.png`**
-- Matriz de confusão do modelo otimizado
-- Mostrar que os erros em "high risk" caíram em relação ao baseline
+**O número mais importante — recall de alto risco:**
+- Subiu de 0.9487 para 0.9744
+- No conjunto de teste havia 39 casos de alto risco
+- O baseline errava ~2 casos; o AG erra ~1 — cada erro num caso grave tem consequência clínica séria
 
 **O que o AG encontrou que o GridSearch não encontraria:**
 - `n_estimators=73` — GridSearch só testa valores da grade; AG buscou entre 10 e 200
