@@ -13,13 +13,11 @@
 
 ## 1. Introdução
 
-**Problema:** classificar risco gestacional em três classes (baixo / médio / alto) a partir de sinais vitais coletados no pré-natal.
+O problema abordado é a classificação automatizada de risco gestacional em três classes — baixo, médio e alto risco — a partir de dados clínicos coletados durante o pré-natal. A correta estratificação do risco é clinicamente relevante: falsos negativos na classe de alto risco podem resultar em complicações graves não detectadas. O sistema visa apoiar a decisão do obstetra, não substituí-la.
 
-**Dataset:** Maternal Health Risk (UCI)
-- ~790 registros, 6 features: `Age`, `SystolicBP`, `DiastolicBP`, `BS`, `BodyTemp`, `HeartRate`
-- Leve desbalanceamento entre classes → métrica primária: **F1-macro**
+O dataset utilizado é o Maternal Health Risk Data Set (UCI), composto por aproximadamente 790 registros e 6 features clínicas: `Age`, `SystolicBP`, `DiastolicBP`, `BS` (glicose em mmol/L), `BodyTemp` e `HeartRate`. O dataset apresenta leve desbalanceamento entre as classes, o que torna o **F1-macro** a métrica primária de avaliação.
 
-**Fase 1 — resultados baseline:**
+**Resultados baseline da Fase 1:**
 
 | Modelo | F1-macro | ROC-AUC | Recall Alto Risco |
 |---|---|---|---|
@@ -29,9 +27,7 @@
 
 ![Comparativo F1-macro por modelo — validação cruzada](figures/baseline_cv_f1_macro.png)
 
-**Objetivos da Fase 2:**
-1. Otimizar hiperparâmetros do Random Forest via **Algoritmo Genético**
-2. Integrar **Claude (Anthropic API)** para gerar explicações clínicas em linguagem natural — adaptadas para médico ou paciente
+O Random Forest foi o vencedor da Fase 1 com `n_estimators=100`, `max_depth=None` e `min_samples_leaf=1`, obtidos via GridSearch. Os objetivos da Fase 2 são: (1) otimizar os hiperparâmetros desse modelo via **Algoritmo Genético**, buscando superar especialmente o recall de alto risco; (2) integrar o **Claude (Anthropic API)** para transformar as saídas numéricas em explicações clínicas em linguagem natural, adaptadas ao perfil do usuário — médico ou paciente.
 
 ---
 
@@ -39,7 +35,7 @@
 
 ### 2.1 Representação
 
-Cada indivíduo = dicionário de 5 genes (hiperparâmetros do Random Forest):
+Cada indivíduo na população do AG é um dicionário de hiperparâmetros do Random Forest. O espaço de busca é definido em `SEARCH_SPACES` com 5 genes, cada um com tipo e domínio próprios:
 
 | Gene | Tipo | Domínio |
 |---|---|---|
@@ -49,39 +45,37 @@ Cada indivíduo = dicionário de 5 genes (hiperparâmetros do Random Forest):
 | `min_samples_leaf` | int | [1, 10] |
 | `max_features` | categorical | {"sqrt", "log2", None} |
 
+A inicialização da população é inteiramente aleatória, sem seeding de soluções conhecidas.
+
 ### 2.2 Operadores Genéticos
 
-Os operadores foram escolhidos para o tipo de representação — genes independentes, sem restrição de ordem (diferente do TSP, onde operadores como OX e Swap preservam sequência):
+A escolha dos operadores é determinada pelo tipo de representação. Como os genes são independentes entre si — ao contrário do TSP, onde a solução é uma permutação de cidades e a ordem importa — é possível usar operadores mais diretos, sem restrições de preservação de sequência.
 
-**Seleção por torneio** (`tournament_size=3`)
-- Sorteia 3 candidatos aleatórios; o com maior fitness vira pai
-- Mantém diversidade: indivíduos medianos ainda têm chance de se reproduzir
+**Seleção por torneio** (`tournament_size=3`): sorteia 3 candidatos aleatórios da população e o de maior fitness é selecionado como pai. O torneio mantém diversidade — indivíduos medianos ainda têm chance de se reproduzir — evitando convergência prematura para um ótimo local.
 
-**Cruzamento uniforme** (`crossover_rate`)
-- Cada gene do filho é herdado de um dos pais com probabilidade 0.5
-- Gera combinações inéditas sem viés posicional
+**Cruzamento uniforme** (`crossover_rate`): cada gene do filho é herdado independentemente de um dos dois pais com probabilidade 0.5. Gera combinações arbitrárias dos genes parentais sem viés posicional, aproveitando a independência entre os hiperparâmetros.
 
-**Mutação por gene** (`mutation_rate`)
-- Com probabilidade `mutation_rate` por gene: int → novo valor nos bounds; categorical → nova opção aleatória
-- Permite explorar regiões fora da população inicial
+**Mutação por gene** (`mutation_rate`): com probabilidade `mutation_rate` por gene, o valor é substituído por um novo dentro dos bounds do gene — essencial para explorar regiões do espaço que não existiam na população inicial.
 
-**Elitismo:** o melhor indivíduo global é preservado em todas as gerações.
+**Elitismo:** o melhor indivíduo global é inserido diretamente na nova população a cada geração, garantindo que a melhor solução encontrada nunca seja perdida.
 
 ### 2.3 Função Fitness
+
+A função fitness avalia cada indivíduo via validação cruzada estratificada:
 
 ```
 fitness = média F1-macro em StratifiedKFold(n_splits=5)
 ```
 
-F1-macro escolhido por duas razões:
-- Problema multiclasse com classes desbalanceadas → macro trata todas igualmente
-- Equilibra precisão e recall especialmente para a classe de alto risco
+O F1-macro foi escolhido porque o problema é multiclasse com classes desbalanceadas — a média macro trata igualmente todas as classes — e porque equilibra precisão e recall, especialmente para a classe de alto risco, onde erros têm impacto clínico assimétrico. A avaliação final no conjunto de teste é separada e realizada apenas sobre o melhor indivíduo ao final da execução.
 
 ---
 
 ## 3. Experimentos
 
 ### 3.1 Configurações
+
+Foram realizados 3 experimentos variando os parâmetros do AG para avaliar o impacto de diferentes pressões seletivas e tamanhos de população:
 
 | Parâmetro | Exp 1 — Padrão | Exp 2 — Alta Mutação | Exp 3 — Pop. Grande |
 |---|---|---|---|
@@ -96,9 +90,7 @@ F1-macro escolhido por duas razões:
 
 ![Curvas de convergência dos 3 experimentos vs baseline GridSearch](figures/ga_convergence.png)
 
-- Todos os experimentos superam o baseline nas primeiras gerações
-- Exp 2 (alta mutação) convergiu mais devagar — perturbação excessiva diluiu a pressão seletiva
-- Exp 1 atingiu platô por volta da geração 7–10
+Todos os experimentos superam o baseline já nas primeiras gerações. O Exp 1 atinge platô por volta da geração 7–10, indicando convergência eficiente. O Exp 2 convergiu mais devagar — a taxa de mutação elevada (0.30) perturba indivíduos promissores antes que o cruzamento possa explorar as regiões do espaço que eles mapeiam, diluindo a pressão seletiva com apenas 20 gerações disponíveis.
 
 ### 3.3 Resultados no Conjunto de Teste
 
@@ -109,7 +101,7 @@ F1-macro escolhido por duas razões:
 | AG Exp 2 — Alta Mutação | 0.9017 | 0.9813 | 0.9487 | 0.8987 |
 | AG Exp 3 — Pop. Grande | 0.9013 | 0.9812 | 0.9744 | 0.8987 |
 
-**Exp 1 é o único que melhorou em todas as métricas simultaneamente.**
+**O Exp 1 é o único que melhorou em todas as métricas simultaneamente.**
 
 **Melhores hiperparâmetros encontrados:**
 
@@ -129,17 +121,19 @@ F1-macro escolhido por duas razões:
 
 ### 3.4 Análise
 
-- **Recall alto risco 0.9487 → 0.9744 (Exp 1):** em 39 casos de alto risco no teste, o baseline errava ~2; o AG erra ~1. Cada erro nessa classe tem consequência clínica direta.
-- **`max_depth=15` vs `None`:** o AG convergiu consistentemente para árvores mais rasas. A validação cruzada estratificada penalizou overfitting de forma mais eficaz que a grade estática do GridSearch.
-- **`n_estimators` menor (73 vs 100):** para ~790 registros, um ensemble mais enxuto captura a estrutura preditiva sem custo adicional.
-- **Exp 2 (mut=0.30):** encontrou os mesmos hiperparâmetros do baseline — perturbação alta demais para convergir em 20 gerações.
-- **Exp 3 (pop=60, gen=30):** recall equivalente ao Exp 1, mas ao custo de 1045s vs 450s → retorno decrescente para este dataset.
+O Exp 1 produziu o melhor resultado geral. O recall de alto risco subiu de 0.9487 para 0.9744 — em 39 casos de alto risco no conjunto de teste, o baseline errava ~2; o AG erra ~1. Cada erro nessa classe tem consequência clínica direta, tornando esse ganho o mais significativo do projeto.
+
+O AG convergiu para `max_depth=15` nos Experimentos 1 e 3, em contraste com `max_depth=None` do GridSearch. Árvores irrestritamente profundas tendem a memorizar o treinamento, e a validação cruzada estratificada como fitness penalizou esse overfitting de forma mais eficaz que a grade estática. O AG também encontrou `n_estimators` menores (69–91 vs 100), indicando que para ~790 registros um ensemble mais enxuto já captura a estrutura preditiva relevante.
+
+O Exp 2 (mut=0.30) encontrou os mesmos hiperparâmetros do baseline — alta mutação demais para convergir em 20 gerações. O Exp 3 (pop=60, gen=30) atingiu recall equivalente ao Exp 1, mas ao custo de 1045s vs 450s, evidenciando retorno decrescente para este dataset.
 
 ---
 
 ## 4. Integração com LLM (Claude)
 
-### 4.1 Arquitetura
+### 4.1 Arquitetura de Agentes
+
+A integração com LLM adota uma arquitetura de agentes especializados implementada em `src/llm/agents/`. A base é a classe `BaseAgent`, que encapsula o Anthropic Python SDK e mantém o histórico de conversa multi-turn (`self.history: list[dict]`). A cada chamada a `chat()`, a mensagem é adicionada ao histórico e a API é invocada com o histórico completo — permitindo que o agente mantenha contexto ao longo de múltiplas interações na mesma sessão.
 
 ```
 BaseAgent (histórico multi-turn, logging, Anthropic SDK)
@@ -147,32 +141,27 @@ BaseAgent (histórico multi-turn, logging, Anthropic SDK)
 └── DoctorAgent   → terminologia clínica, resposta em 4 seções
 ```
 
-- Modelo: `claude-sonnet-4-6`
-- Histórico preservado por sessão → perguntas de follow-up têm contexto completo
-- Cada chamada loga `input_tokens`, `output_tokens` e `elapsed_ms`
+O modelo utilizado é `claude-sonnet-4-6`. Cada chamada à API registra em log `input_tokens`, `output_tokens` e `elapsed_ms` para monitoramento de custo e latência.
 
 ### 4.2 Diferenças entre Agentes
+
+Os dois agentes diferem fundamentalmente nos system prompts, que definem tom, estrutura de resposta e guardrails:
 
 | | PatientAgent | DoctorAgent |
 |---|---|---|
 | Tom | Acolhedor, sem jargão | Técnico, terminologia clínica |
 | Probabilidades | Não cita números | Inclui probabilidades e feature importance |
-| Estrutura | Orientações práticas | 4 seções: análise · avaliação · investigação · conduta |
+| Estrutura | Orientações práticas de vida | 4 seções: análise · avaliação · investigação · conduta |
 | Guardrails | Não prescreve, não extrapola escopo | Não responde questões administrativas/jurídicas |
-| Referências clínicas | Não | PA ≥140/90 = HAS; BS ≥7.0 = diabetes; etc. |
+| Referências clínicas | Não | PA ≥140/90 = HAS; BS ≥7.0 = diabetes; Temp ≥38°C = febre |
 
 ### 4.3 Prompt Engineering
 
-O prompt inicial de cada agente injeta:
-- Dados clínicos individuais da paciente
-- Predição do modelo + probabilidades por classe
-- Importância das top 4 features
-
-→ Respostas são personalizadas por caso, não genéricas por classe de risco.
+O prompt inicial de cada agente injeta os dados clínicos individuais da paciente, a predição do modelo com probabilidades por classe e a importância das top 4 features — garantindo que as respostas sejam personalizadas para o caso específico, e não genéricas por classe de risco. O `PatientAgent` mapeia cada valor individual a orientações concretas (ex: BS=15.0 → orientação alimentar; SystolicBP=160 → buscar atendimento hoje). O `DoctorAgent` cruza os achados com os valores de referência clínicos embutidos no prompt e estrutura a investigação complementar e conduta para o caso específico.
 
 ### 4.4 Avaliação — LLM-as-judge
 
-O `evaluator.py` usa o próprio Claude para avaliar a qualidade das respostas:
+A qualidade das respostas geradas é avaliada automaticamente via `evaluator.py`, que usa o próprio Claude como juiz com rubricas distintas por perfil:
 
 | Critério (PatientAgent) | Critério (DoctorAgent) |
 |---|---|
@@ -182,37 +171,32 @@ O `evaluator.py` usa o próprio Claude para avaliar a qualidade das respostas:
 | acionabilidade (1–5) | terminologia (1–5) |
 | within_scope (bool) | within_scope (bool) |
 
-Retorna `{scores, within_scope, justificativa, score_total}` em JSON estruturado.
+O avaliador retorna `{scores, within_scope, justificativa, score_total}` em JSON estruturado, viabilizando monitoramento contínuo da qualidade sem avaliação manual caso a caso.
 
 ### 4.5 Interface Web — Chatbot
 
-Fluxo da aplicação Streamlit (`app.py`):
+A interface é implementada em Streamlit (`app.py`) como um chatbot conversacional. O usuário identifica seu perfil (médico ou paciente), e o bot coleta os 6 campos clínicos sequencialmente com validação fisiológica de range e cross-validação (ex: diastólica < sistólica). A temperatura é coletada em °C e convertida para °F internamente antes de passar ao modelo, que foi treinado nessa escala. Após a coleta, o modelo classifica o risco e o agente correspondente gera a análise inicial; a sessão então entra em modo Q&A multi-turn com histórico preservado.
 
 ```
 Landing page
     → Identificação: médico ou paciente?
-    → Coleta dos 6 campos via chat (com validação fisiológica)
-    → Predição RF + geração da análise inicial pelo agente
+    → Coleta dos 6 campos via chat (validação fisiológica + cross-validação)
+    → Predição RF → análise inicial pelo agente ativo
     → Q&A multi-turn com histórico preservado
 ```
-
-- Temperatura coletada em °C, convertida para °F antes do modelo
-- Cross-validação: diastólica < sistólica
-- Palavra-chave "recomeçar" reinicia a sessão
 
 ---
 
 ## 5. Observabilidade
 
-Logging estruturado em JSON (NDJSON) — plugável para cloud sem alterar código de negócio:
+O módulo `src/observability/` implementa logging estruturado em formato JSON (NDJSON — uma linha por evento). O design prioriza plugabilidade: localmente os logs são gravados em `logs/app.log` e no stdout; para adicionar observabilidade em cloud basta instanciar um handler adicional em `setup_logging()` sem alterar o código de negócio:
 
 ```python
-# Para adicionar cloud basta um handler em setup_logging():
-logger.addHandler(watchtower.CloudWatchLogHandler(...))   # AWS
+logger.addHandler(watchtower.CloudWatchLogHandler(...))   # AWS CloudWatch
 logger.addHandler(DatadogHandler(...))                     # Datadog
 ```
 
-**Eventos por sessão** (todos correlacionados por `session_id`):
+Todos os eventos são correlacionados por `session_id`, permitindo rastrear o ciclo completo de uma sessão:
 
 | Evento | Dados logados |
 |---|---|
@@ -223,11 +207,13 @@ logger.addHandler(DatadogHandler(...))                     # Datadog
 | `llm.call.completed` | input_tokens, output_tokens, elapsed_ms |
 | `qa.question` | número do turn |
 
-> Valores clínicos individuais não são logados — apenas resultado agregado.
+> Os valores clínicos individuais não são logados — apenas o resultado agregado (risco e probabilidades) — por serem dados de saúde sensíveis.
 
 ---
 
 ## 6. Desafios e Soluções
+
+O desenvolvimento em Python 3.14 introduziu três incompatibilidades com dependências existentes que exigiram soluções específicas:
 
 | Desafio | Solução |
 |---|---|
@@ -235,18 +221,18 @@ logger.addHandler(DatadogHandler(...))                     # Datadog
 | `n_jobs=-1` falha na serialização com joblib no Python 3.14 | Substituição por `n_jobs=1` em `baseline.py` e `fitness.py` |
 | scipy sem wheel para Python 3.14 | Remoção do scipy — funcionalidades cobertas pelo scikit-learn |
 | dtype `object` em `y_train` após `map()` | `.astype("int64")` explícito após o split |
-| AG lento sem paralelismo (~35 min para 3 experimentos) | Desenvolvimento com pop=5/gen=3; execução completa headless via `nbconvert` |
+| AG lento sem paralelismo (~35 min para 3 experimentos) | Desenvolvimento com pop=5/gen=3; execução completa headless via `nbconvert` em background |
 
 ---
 
 ## 7. Testes Automatizados
 
-21 testes em 4 módulos — todos passando:
+O projeto conta com 21 testes automatizados distribuídos em 4 módulos, executados via pytest. Os testes cobrem o pipeline completo do AG — da codificação dos genes ao loop principal — e a construção dos prompts dos agentes LLM.
 
 | Módulo | Arquivo | O que testa |
 |---|---|---|
-| encoding | `test_encoding.py` | Keys, bounds int/float, choices categorical, decode para sklearn |
-| operators | `test_operators.py` | Torneio, cruzamento, mutação, bounds respeitados |
+| encoding | `test_encoding.py` | Keys, bounds int, choices categorical, decode para sklearn |
+| operators | `test_operators.py` | Torneio, cruzamento, mutação, bounds respeitados com mut=1.0 |
 | ga | `test_ga.py` | Keys do resultado, comprimento do histórico, monotonicidade do `global_best`, reprodutibilidade |
 | prompts | `test_prompts.py` | Presença de predição, dados do paciente e métricas nos prompts |
 
@@ -254,11 +240,11 @@ logger.addHandler(DatadogHandler(...))                     # Datadog
 
 ## 8. Conclusão
 
-O AG superou o GridSearch na métrica clinicamente mais relevante: **recall de alto risco 0.9487 → 0.9744**, com ganhos adicionais em F1-macro e accuracy. A convergência para `max_depth=15` (vs `None` no GridSearch) e `n_estimators` menores indica que a validação cruzada estratificada como fitness penaliza overfitting de forma mais eficaz que uma grade estática.
+O Algoritmo Genético implementado demonstrou capacidade de superar o GridSearch da Fase 1 na métrica clinicamente mais relevante: o recall da classe de alto risco passou de 0.9487 para 0.9744 no Experimento 1, com melhorias adicionais em F1-macro (0.9017 → 0.9070) e accuracy (0.8987 → 0.9051). A convergência consistente para `max_depth=15` — contra `max_depth=None` do GridSearch — sugere que o espaço de busca contínuo combinado com validação cruzada estratificada como fitness favorece modelos com melhor generalização do que uma grade discreta estática.
 
-A arquitetura de agentes LLM permite que o mesmo classificador produza saídas radicalmente diferentes por perfil de usuário — orientações práticas acessíveis para a paciente, análise clínica estruturada para o médico — com histórico de conversa preservado para Q&A contextualizado.
+A arquitetura de agentes LLM vai além de uma camada de geração de texto: o mesmo classificador produz saídas radicalmente diferentes por perfil de usuário. O `PatientAgent` traduz probabilidades e importâncias de features em orientações práticas de vida, calibradas à urgência real do caso. O `DoctorAgent` entrega análise clínica estruturada com valores de referência, investigação sugerida e conduta recomendada específica para os dados individuais da paciente. O avaliador LLM-as-judge fornece feedback automático sobre qualidade das respostas em rubricas distintas por perfil, viabilizando monitoramento contínuo sem avaliação manual.
 
 **Limitações:**
-- Dataset pequeno (~790 registros) — diferenças de 0.005 em F1-macro podem não ser estatisticamente robustas
-- Critério de parada fixo (gerações) — o Exp 1 estabiliza por volta da geração 7–10
-- Respostas dos agentes LLM não foram validadas por obstetras em estudo controlado
+- Dataset pequeno (~790 registros) — diferenças de 0.005 em F1-macro podem não ser estatisticamente robustas em amostras diferentes
+- Critério de parada fixo — o Exp 1 estabiliza por volta da geração 7–10, indicando que parte do tempo computacional é gasto sem progresso
+- Respostas dos agentes LLM não foram validadas por obstetras em estudo controlado — necessário antes de qualquer uso em ambiente clínico real
