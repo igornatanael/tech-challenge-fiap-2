@@ -100,25 +100,23 @@
 ---
 
 ## BLOCO 4 — Algoritmo Genético: Resultados (2 min)
-📺 _Tela: Notebook 02 aberto e executado_
+📺 _Tela: `reports/figures/` aberto no Finder ou VS Code_
 
-**Apontar a tabela de configurações no topo do notebook (célula de introdução):**
-- 3 experimentos com parâmetros diferentes lado a lado
+**3 experimentos — mencionar as configurações:**
 - Exp 1 (padrão): pop=30, gen=20, mut=0.10, cross=0.80
 - Exp 2 (alta mutação): pop=30, gen=20, mut=0.30, cross=0.80
 - Exp 3 (pop grande): pop=60, gen=30, mut=0.10, cross=0.90
 
-**Rolar até a célula 6 — gráfico de convergência** (`ga_convergence.png`)
-- Gráfico da esquerda: melhor fitness global por geração
+**Abrir `ga_convergence.png`**
+- Gráfico da esquerda — melhor fitness global por geração:
   - Cada linha colorida = um experimento
   - Linha vermelha pontilhada = baseline GridSearch (0.9017)
   - Todos os experimentos cruzam a linha vermelha — todos superaram o GridSearch
-  - A melhoria acontece principalmente nas primeiras gerações
-- Gráfico da direita: fitness médio da população
-  - Mostra que a população como um todo melhora, não só o melhor indivíduo
+  - Melhoria concentrada nas primeiras gerações
+- Gráfico da direita — fitness médio da população:
+  - A população inteira melhora, não só o melhor indivíduo
 
-**Rolar até a célula 9 — tabela comparativa**
-- Apontar as colunas `f1_macro` e `recall_high_risk`
+**Resultados finais — Exp 1 foi o melhor:**
 
 | | GridSearch | AG Exp 1 |
 |---|---|---|
@@ -127,12 +125,13 @@
 
 - Recall de alto risco é a métrica mais importante — errar um caso grave tem consequências sérias
 
+**Abrir `ga_confusion_exp1_padrao.png`**
+- Matriz de confusão do modelo otimizado
+- Mostrar que os erros em "high risk" caíram em relação ao baseline
+
 **O que o AG encontrou que o GridSearch não encontraria:**
 - `n_estimators=73` — GridSearch só testa valores da grade; AG buscou entre 10 e 200
 - `max_depth=15` — árvores menores, menos overfitting que max_depth irrestrito
-
-**Apontar pasta `experiments/` no VS Code**
-- 3 arquivos JSON com histórico completo de cada experimento — geração a geração
 
 ---
 
