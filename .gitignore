@@ -30,8 +30,6 @@ htmlcov/
 
 # Reports (generated files)
 reports/*.pdf
-reports/figures/*.png
-reports/figures/*.svg
 
 # Experiment outputs (optional — comment out if you want to track them)
 # experiments/*.json
